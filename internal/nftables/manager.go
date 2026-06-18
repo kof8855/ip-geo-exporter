@@ -306,12 +306,12 @@ func (m *Manager) runNftStdin(desc string, ruleset string) error {
 }
 
 // MustRunNftCheck verifies nftables is available on the system.
-func MustRunNftCheck() {
+func MustRunNftCheck() error {
 	if err := exec.Command("nft", "--version").Run(); err != nil {
-		fmt.Printf("[FATAL] nftables command not found: %v\n", err)
-		return
+		return fmt.Errorf("nftables command not found (is nftables installed?): %w", err)
 	}
-	fmt.Printf("[info] nftables available\n")
+	fmt.Println("[info] nftables available")
+	return nil
 }
 
 // init() to set time format for nftables

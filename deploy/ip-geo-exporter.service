@@ -5,22 +5,24 @@ After=network.target nftables.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/ip-geo-exporter \
-    --listen-address=:9100 \
-    --geoip-db=/usr/share/GeoIP/GeoLite2-City.mmdb \
-    --poll-interval=5s \
-    --protocol-filter=tcp,udp,icmp \
-    --enable-ipv6=true \
-    --filter-private=false \
-    --geoip-lang=zh-CN \
-    --cleanup-on-exit=true \
-    --log-level=info \
-    --log-format=text
+WorkingDirectory=/opt/ip-geo-exporter
+ExecStart=/usr/local/bin/ip-geo-exporter --config=/opt/ip-geo-exporter/config.yaml
+
+# 如果不想用 config 文件，也可以直接传参：
+# ExecStart=/usr/local/bin/ip-geo-exporter \
+#     --listen-address=:9100 \
+#     --poll-interval=5s \
+#     --protocol-filter=tcp,udp,icmp \
+#     --enable-ipv6=true \
+#     --filter-private=false \
+#     --geoip-lang=zh-CN \
+#     --cleanup-on-exit=true \
+#     --log-level=info
 
 Restart=always
 RestartSec=5
 
-# Only needs CAP_NET_ADMIN for nftables
+# nftables 需要 CAP_NET_ADMIN 来操作规则集
 CapabilityBoundingSet=CAP_NET_ADMIN
 AmbientCapabilities=CAP_NET_ADMIN
 

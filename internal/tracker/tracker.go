@@ -117,6 +117,20 @@ func (t *Tracker) Size() int {
 	return len(t.shadow)
 }
 
+// SizeByDirection returns the number of tracked flows split by direction.
+func (t *Tracker) SizeByDirection() (inbound, outbound int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k := range t.shadow {
+		if k.Direction == "download" || k.Direction == "inbound" {
+			inbound++
+		} else {
+			outbound++
+		}
+	}
+	return
+}
+
 // FlowElement is an input element from nftables poll.
 type FlowElement struct {
 	IP        string

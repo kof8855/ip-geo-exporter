@@ -23,9 +23,22 @@ import (
 	"github.com/kof8855/ip-geo-exporter/internal/tracker"
 )
 
-const version = "0.1.3"
+const version = "0.1.4"
 
 func main() {
+	// ─── --version 优先处理 ──────────────────────────────────────────
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-version" {
+			v := runtime.Version()
+			if bi, ok := debug.ReadBuildInfo(); ok {
+				v = bi.GoVersion
+			}
+			fmt.Printf("ip-geo-exporter %s (go %s)\n", version, v)
+			return
+		}
+	}
+
+	// ─── 加载配置 ────────────────────────────────────────────────────
 	cfg := config.Parse()
 
 	if err := cfg.Validate(); err != nil {
@@ -36,10 +49,13 @@ func main() {
 	setupLogging(cfg.LogFormat, cfg.LogLevel)
 	slog.Info("starting ip-geo-exporter", "version", version)
 
-	// Check nftables availability
-	nftables.MustRunNftCheck()
+	// ─── 检查 nftables 是否可用 ──────────────────────────────────────
+	if err := nftables.MustRunNftCheck(); err != nil {
+		slog.Error("nftables check failed", "error", err)
+		os.Exit(1)
+	}
 
-	// Initialize nftables manager
+	// ─── 初始化 nftables ─────────────────────────────────────────────
 	mgr := nftables.New(cfg)
 	if err := mgr.Setup(); err != nil {
 		slog.Error("nftables setup failed", "error", err)
@@ -47,7 +63,7 @@ func main() {
 	}
 	slog.Info("nftables rules installed")
 
-	// Initialize GeoIP
+	// ─── GeoIP ───────────────────────────────────────────────────────
 	var geo *geoip.Lookup
 	if cfg.GeoIPDB != "" {
 		var err error
@@ -63,14 +79,15 @@ func main() {
 		slog.Warn("no GeoIP database specified, all locations will be unknown")
 	}
 
-	// Initialize tracker + metrics
+	// ─── Tracker + Metrics ──────────────────────────────────────────
 	trk := tracker.New()
 	met := metrics.New()
-	goVersion := strings.TrimPrefix(runtime.Version(), "go")
+
+	v := runtime.Version()
 	if bi, ok := debug.ReadBuildInfo(); ok {
-		goVersion = bi.GoVersion
+		v = bi.GoVersion
 	}
-	met.SetBuildInfo(version, goVersion)
+	met.SetBuildInfo(version, v)
 
 	// activeLabels remembers the full label set for each flow, needed to
 	// delete stale Prometheus counters when nftables times out the IP.
@@ -79,7 +96,7 @@ func main() {
 
 	ifaceName := "all"
 
-	// ─── /metrics handler: 每次 Prometheus scrape 触发一次 poll ─────
+	// ─── /metrics handler ───────────────────────────────────────────
 	mux := http.NewServeMux()
 	mux.Handle(cfg.MetricsPath, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pollOnce(context.Background(), mgr, trk, met, geo, ifaceName, activeLabels, &activeLabelsMu)
@@ -102,7 +119,7 @@ func main() {
 	pollOnce(context.Background(), mgr, trk, met, geo, ifaceName, activeLabels, &activeLabelsMu)
 	slog.Info("exporter ready — waiting for Prometheus scrapes (passive mode)")
 
-	// ─── 等待信号 ────────────────────────────────────────────────
+	// ─── 等待信号 ───────────────────────────────────────────────────
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
@@ -142,7 +159,7 @@ func pollOnce(ctx context.Context, mgr *nftables.Manager, trk *tracker.Tracker, 
 	// 计算增量
 	deltas := trk.Update(elements)
 
-	// 清理 stale：nftables 已超时删除的 IP → 同时删除 Prometheus 计数器
+	// 清理 stale
 	staleKeys := trk.CleanStale(currentKeys)
 	if len(staleKeys) > 0 {
 		labelsMu.Lock()
@@ -182,8 +199,9 @@ func pollOnce(ctx context.Context, mgr *nftables.Manager, trk *tracker.Tracker, 
 		labelsMu.Unlock()
 	}
 
-	// 内部状态
-	met.SetTrackedIPs(trk.Size(), trk.Size())
+	// 内部状态 — 按方向分别统计
+	inbound, outbound := trk.SizeByDirection()
+	met.SetTrackedIPs(inbound, outbound)
 	if geo != nil {
 		hits, misses, entries := geo.Stats()
 		met.SetCacheStats(hits, misses, entries)
