@@ -499,7 +499,7 @@ ip × direction × protocol = 100,000 × 2 × 4 = 800,000 条时间序列
 sum by(country) (rate(ip_traffic_bytes_total{direction="download"}[5m]))
 
 # ✅ 正确：只看 Top 20 IP
-topk(20, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[$__rate_interval])))
+topk(20, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[15s])))
 
 # ❌ 错误：不加聚合取所有 IP，会导致 Prometheus 返回海量数据
 rate(ip_traffic_bytes_total[5m])
@@ -589,7 +589,7 @@ rate(ip_traffic_bytes_total[5m]) / rate(ip_traffic_packets_total[5m])
 ```promql
 # ─── 实时速率 ───
 # 当前下行速率（Top 10）
-topk(10, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[$__rate_interval])))
+topk(10, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[15s])))
 
 # 按国家汇总
 sum by(country) (rate(ip_traffic_bytes_total{direction="download"}[5m]))
@@ -718,7 +718,7 @@ services:
 ```promql
 # 下行
 topk(20, label_join(
-  sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[$__rate_interval])),
+  sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[15s])),
   "Name", "-", "country", "ip"
 ))
 ```
@@ -728,7 +728,7 @@ topk(20, label_join(
 展示流量趋势曲线：
 
 ```promql
-topk(10, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[$__rate_interval])))
+topk(10, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[15s])))
 ```
 
 ### 仪表盘：Worldmap 面板

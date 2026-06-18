@@ -274,6 +274,33 @@ ip-geo-exporter/
 
 ## 4. 核心数据结构
 
+### rate() 时间窗口说明
+
+Grafana 的 `rate(metric[$__rate_interval])` 会导致**下载结束后的"拖尾"**现象：
+
+```
+实际流量:  ████████████████████░░░░░░░░░░░░░░░░░░░░░░░░
+                   下载结束        rate[1m]窗口完全滑出
+                   ▼              ▼
+rate[1m]看到的: ████████████████╱╲╱╲╱╲░░░░░░░░░░░░░░░░
+                   瞬间下降      ~60秒后归零
+```
+
+这不是 exporter 的问题，而是 rate() 的数学特性。有以下方案：
+
+| 方案 | PromQL | 拖尾长度 | 曲线平滑度 |
+|------|--------|---------|-----------|
+| 默认 ($__rate_interval) | `rate(...[$__rate_interval])` | ~60s | 平滑 |
+| 短窗口 | `rate(...[15s])` | **~15s** | 略有锯齿 |
+| 短窗口+归零过滤 | `rate(...[15s]) > 0` | **~15s，归零立即消失** | 略有锯齿 |
+
+**推荐方案：** 生产环境 Grafana 面板中统一使用 `[15s]` 替代 `[$__rate_interval]`，并加 `> 0` 过滤。
+
+```promql
+# ✅ 推荐
+topk(10, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[15s])) > 0)
+```
+
 ### 4.1 配置结构 (`internal/config/config.go`)
 
 ```go
