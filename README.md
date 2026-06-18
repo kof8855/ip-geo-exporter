@@ -709,6 +709,95 @@ services:
 
 ---
 
+
+## 📊 PromQL 查询大全
+
+所有查询都以 `ip_traffic_bytes_total` 为例，替换 `direction` 即可查上行/下行。
+
+### ─── 实时速率 ───
+
+```promql
+# 当前每秒速率（Top 10 IP），推荐 [15s] 减少拖尾，>0 过滤归零IP
+topk(10, sum by(ip, country) (rate(ip_traffic_bytes_total{direction="download"}[15s])) > 0)
+
+# 按国家汇总速率
+sum by(country) (rate(ip_traffic_bytes_total{direction="download"}[15s]))
+```
+
+### ─── 累计总量（从exporter启动至今） ───
+
+```promql
+# 单个IP累计下载总量（GB）
+ip_traffic_bytes_total{ip="8.8.8.8",direction="download"} / 1073741824
+
+# 按IP排行总流量
+topk(10, sum by(ip, country) (ip_traffic_bytes_total{direction="download"}) / 1073741824)
+
+# 按国家汇总总流量
+sum by(country) (ip_traffic_bytes_total{direction="download"}) / 1073741824
+```
+
+### ─── 增量趋势图（推荐，无拖尾） ───
+
+`increase()` 计算一个时间窗口内的增量，Grafana 用 Time Series 面板显示为"台阶图"，**没有 rate() 的拖尾问题**。
+
+```promql
+# 5分钟增量（适合看分钟级流量波动）
+increase(ip_traffic_bytes_total{direction="download"}[5m]) / 1073741824
+
+# 30分钟增量（适合看长期趋势）
+increase(ip_traffic_bytes_total{direction="download"}[30m]) / 1073741824
+
+# 1小时增量（适合日报/看板）
+increase(ip_traffic_bytes_total{direction="download"}[1h]) / 1073741824
+```
+
+**Grafana 设置建议：** Time Series 面板 → 单位 `Data → Gibibytes`。
+
+### ─── 过滤特定服务器 ───
+
+如果 Prometheus 配置了多个 job 或多个 target：
+
+```promql
+# 只查看某台服务器的流量
+increase(ip_traffic_bytes_total{direction="download",instance="你的服务器IP:9100"}[5m]) / 1073741824
+
+# 按 instance 汇总各服务器总流量
+sum by(instance) (increase(ip_traffic_bytes_total{direction="download"}[5m])) / 1073741824
+```
+
+### ─── Worldmap 全球流量分布 ───
+
+```promql
+# 按国家+坐标汇总速率（供 Grafana Worldmap Panel 使用）
+sum by(country, latitude, longitude) (rate(ip_traffic_bytes_total{direction="download"}[5m]))
+```
+
+### ─── 诊断与调试 ───
+
+```promql
+# 原始 Counter 值（不带 rate，验证数据是否正确）
+ip_traffic_bytes_total{ip="8.8.8.8",direction="download"}
+
+# 平均包大小
+rate(ip_traffic_bytes_total[5m]) / rate(ip_traffic_packets_total[5m])
+
+# 当前追踪的活跃 IP 数
+ip_geo_tracked_ips
+```
+
+### ─── `rate()` vs `increase()` 对比 ───
+
+| 函数 | 输出 | 适合场景 | 拖尾? |
+|------|------|---------|-------|
+| `rate(...[$__rate_interval])` | B/s（每秒速率） | 实时曲线图 | ❌ 有，约 1 分钟 |
+| `rate(...[15s])` | B/s（每秒速率） | 实时曲线图 | ⚠️ 约 15 秒 |
+| `increase(...[5m])` | B（5分钟内总增量） | 台阶/柱状图 | ✅ **无拖尾** |
+| `raw counter` | B（累计值） | 原始数据验证 | ✅ **无拖尾** |
+
+**推荐：** 日常用 `increase(...[5m])` 做流量趋势图，没有任何 rate 拖尾问题。
+
+
 ## Grafana 配置
 
 ### 仪表盘：Table 面板
