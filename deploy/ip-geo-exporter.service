@@ -1,0 +1,34 @@
+[Unit]
+Description=ip-geo-exporter - Per-IP traffic monitoring with GeoIP
+Documentation=https://github.com/kof8855/ip-geo-exporter
+After=network.target nftables.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ip-geo-exporter \
+    --listen-address=:9100 \
+    --geoip-db=/usr/share/GeoIP/GeoLite2-City.mmdb \
+    --poll-interval=5s \
+    --protocol-filter=tcp,udp,icmp \
+    --enable-ipv6=true \
+    --filter-private=false \
+    --geoip-lang=zh-CN \
+    --cleanup-on-exit=true \
+    --log-level=info \
+    --log-format=text
+
+Restart=always
+RestartSec=5
+
+# Only needs CAP_NET_ADMIN for nftables
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/run
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
