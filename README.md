@@ -1,3 +1,6 @@
+Grafana上简单的展示效果
+<img width="2553" height="1186" alt="image" src="https://github.com/user-attachments/assets/223db46f-11ed-45bb-b848-3246acbf9cb7" />
+
 # ip-geo-exporter
 
 基于 **nftables 内核计数器 + GeoLite2-City** 的逐 IP 流量 Prometheus exporter。
